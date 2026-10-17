@@ -1,16 +1,33 @@
+/*
+ * JSX import and export.
+ *
+ * importSource parses a component with Babel and turns one JSX root into an
+ * EditorNode tree. exportSource parses the same source again, rebuilds that root
+ * from the tree, and splices it back into the original text. Bytes outside the
+ * root never change. Inside it, export starts from clones of the original AST
+ * nodes, so props, handlers, and spreads Frame can't edit come through intact.
+ *
+ * The two parses match nodes by source offset, keyed as `jsx-<start>`. That only works
+ * when export runs on the exact source that import read, which is why Project
+ * carries its source along.
+ */
+
 import { parse } from '@babel/parser';
 import generate from '@babel/generator';
 import * as t from '@babel/types';
 import type { EditorNode, Project, Style } from './model';
 import { voidTags } from './model';
 
+/** HTML tags Frame renders and edits. Any other tag, including every custom component, is opaque. */
 const safeTags = new Set(
   'a article aside b blockquote br button caption code dd details div dl dt em figcaption figure footer form h1 h2 h3 h4 h5 h6 header hr i img input label li main nav ol p pre section small span strong summary table tbody td textarea th thead tr ul video'.split(
     ' ',
   ),
 );
+/** Key that identifies a JSX node across two parses of the same source. */
 const origin = (node: t.Node) => `jsx-${node.start}`;
 
+/** Visits every AST node depth-first, parents before children. */
 function walk(node: t.Node, visit: (node: t.Node) => void) {
   visit(node);
   for (const key of t.VISITOR_KEYS[node.type] || []) {
@@ -23,20 +40,44 @@ function walk(node: t.Node, visit: (node: t.Node) => void) {
   }
 }
 
+/** Import and export must parse with the same options or the offsets won't line up. */
 function parseAst(source: string) {
   return parse(source, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
 }
 
+/** Value of a string or number literal, including negative numbers. Undefined for anything dynamic. */
 function literal(node: t.Node | null | undefined): string | number | undefined {
   if (t.isStringLiteral(node) || t.isNumericLiteral(node)) return node.value;
   if (t.isUnaryExpression(node) && node.operator === '-' && t.isNumericLiteral(node.argument))
     return -node.argument.value;
 }
 
+/** Index of the named JSX attribute, or -1. */
+function attrIndex(attributes: t.JSXOpeningElement['attributes'], name: string) {
+  return attributes.findIndex((attr) => t.isJSXAttribute(attr) && attr.name.name === name);
+}
+
+/** Replaces the attribute with the same name where it stands, or appends it. */
+function setAttr(attributes: t.JSXOpeningElement['attributes'], attr: t.JSXAttribute) {
+  const index = attrIndex(attributes, String(attr.name.name));
+  if (index >= 0) attributes[index] = attr;
+  else attributes.push(attr);
+}
+
+/** Name of a plain `key: value` property. Undefined for spreads, methods, and computed keys. */
+function propertyKey(prop: t.Node): string | undefined {
+  if (!t.isObjectProperty(prop) || prop.computed) return;
+  if (t.isIdentifier(prop.key)) return prop.key.name;
+  if (t.isStringLiteral(prop.key)) return prop.key.value;
+}
+
+/**
+ * Literal entries of an inline `style={{...}}` object. Variables, spreads, and
+ * expressions stay out of the editor but remain in the source.
+ */
 function staticStyle(element: t.JSXElement): Style {
-  const attr = element.openingElement.attributes.find(
-    (a) => t.isJSXAttribute(a) && a.name.name === 'style',
-  );
+  const attributes = element.openingElement.attributes;
+  const attr = attributes[attrIndex(attributes, 'style')];
   if (
     !t.isJSXAttribute(attr) ||
     !t.isJSXExpressionContainer(attr.value) ||
@@ -45,21 +86,26 @@ function staticStyle(element: t.JSXElement): Style {
     return {};
   const style: Style = {};
   for (const prop of attr.value.expression.properties) {
-    if (!t.isObjectProperty(prop) || prop.computed) continue;
-    const key = t.isIdentifier(prop.key)
-      ? prop.key.name
-      : t.isStringLiteral(prop.key)
-        ? prop.key.value
-        : null;
-    const value = literal(prop.value);
+    const key = propertyKey(prop);
+    const value = t.isObjectProperty(prop) ? literal(prop.value) : undefined;
     if (key && value !== undefined) style[key] = value;
   }
   return style;
 }
 
-function toEditor(
-  node: t.JSXElement | t.JSXFragment | t.JSXExpressionContainer | t.JSXSpreadChild | t.JSXText,
-): EditorNode {
+/** Anything that can appear as a JSX child. */
+type JSXChild = t.JSXElement['children'][number];
+
+/** Whitespace-only text between tags is formatting, not content. */
+function childNodes(children: JSXChild[]): EditorNode[] {
+  return children.filter((c) => !t.isJSXText(c) || c.value.trim()).map(toEditor);
+}
+
+/**
+ * Converts one JSX child to an editor node. An element whose children are all
+ * literal text becomes a single text node, so its text edits as one string.
+ */
+function toEditor(node: JSXChild): EditorNode {
   const id = origin(node);
   const base = { id, origin: id, style: {}, attrs: {}, children: [] };
   if (t.isJSXText(node))
@@ -69,7 +115,7 @@ function toEditor(
       ...base,
       tag: 'fragment',
       name: 'Fragment',
-      children: node.children.filter((c) => !t.isJSXText(c) || c.value.trim()).map(toEditor),
+      children: childNodes(node.children),
     };
   if (t.isJSXExpressionContainer(node) && literal(node.expression) !== undefined) {
     const text = String(literal(node.expression));
@@ -109,6 +155,7 @@ function toEditor(
         .trim()
     : undefined;
   const style = staticStyle(node);
+  // Layer name: the data-layer attribute, else something readable from the tag or text.
   const label =
     attrs['data-layer'] ||
     (tag === 'img'
@@ -133,12 +180,14 @@ function toEditor(
     originalStyle: { ...style },
     attrs,
     ...(textOnly ? { text, originalText: text } : {}),
-    children: textOnly
-      ? []
-      : node.children.filter((c) => !t.isJSXText(c) || c.value.trim()).map(toEditor),
+    children: textOnly ? [] : childNodes(node.children),
   };
 }
 
+/**
+ * Opens a component. Throws a message meant for the user when the file is too
+ * large, has no JSX, or renders only another component.
+ */
 export function importSource(source: string, fileName = 'Page.tsx'): Project {
   if (source.length > 1_000_000)
     throw new Error('This file is too large. Choose a component smaller than 1 MB.');
@@ -175,16 +224,15 @@ export function importSource(source: string, fileName = 'Page.tsx'): Project {
   };
 }
 
-function valueNode(value: string | number) {
-  return typeof value === 'number' ? t.numericLiteral(value) : t.stringLiteral(value);
-}
-
-function buildElement(
-  node: EditorNode,
-  originals: Map<string, t.Node>,
-): t.JSXElement | t.JSXFragment | t.JSXExpressionContainer | t.JSXSpreadChild | t.JSXText {
+/**
+ * Rebuilds one node as JSX. Starts from a clone of the node's original AST when
+ * it has one, then applies only what changed in the editor.
+ */
+function buildElement(node: EditorNode, originals: Map<string, JSXChild>): JSXChild {
   const original = node.origin ? originals.get(node.origin) : undefined;
-  if (node.opaque && original) return t.cloneNode(original, true) as t.JSXElement;
+  // Preserved code goes back verbatim. Unstyled text stays bare text. Styling or
+  // hiding a text run needs a wrapper, which the element path below builds as a <span>.
+  if (node.opaque && original) return t.cloneNode(original, true);
   if (
     (t.isJSXText(original) || t.isJSXExpressionContainer(original)) &&
     !Object.keys(node.style).length &&
@@ -209,13 +257,12 @@ function buildElement(
         voidTags.has(node.tag),
       );
   const attributes = element.openingElement.attributes;
+  // Hidden nodes export as display: none. The style attribute is rewritten only
+  // when a value differs from what was imported.
   const style: Style = { ...node.style, ...(node.hidden ? { display: 'none' } : {}) };
   const changed = Object.keys(style).filter((key) => style[key] !== node.originalStyle?.[key]);
   if (changed.length) {
-    const index = attributes.findIndex(
-      (attr) => t.isJSXAttribute(attr) && attr.name.name === 'style',
-    );
-    const attr = index >= 0 ? attributes[index] : undefined;
+    const attr = attributes[attrIndex(attributes, 'style')];
     const expression =
       t.isJSXAttribute(attr) && t.isJSXExpressionContainer(attr.value)
         ? attr.value.expression
@@ -229,29 +276,20 @@ function buildElement(
         );
     for (const key of changed) {
       // Remove static assignments, then append after spreads so visual edits win.
-      object.properties = object.properties.filter(
-        (prop) =>
-          !(
-            t.isObjectProperty(prop) &&
-            !prop.computed &&
-            ((t.isIdentifier(prop.key) && prop.key.name === key) ||
-              (t.isStringLiteral(prop.key) && prop.key.value === key))
-          ),
-      );
+      object.properties = object.properties.filter((prop) => propertyKey(prop) !== key);
+      const value = style[key];
       object.properties.push(
         t.objectProperty(
           t.isValidIdentifier(key) ? t.identifier(key) : t.stringLiteral(key),
-          valueNode(style[key]),
+          typeof value === 'number' ? t.numericLiteral(value) : t.stringLiteral(value),
         ),
       );
     }
-    const replacement = t.jsxAttribute(t.jsxIdentifier('style'), t.jsxExpressionContainer(object));
-    if (index >= 0) attributes[index] = replacement;
-    else attributes.push(replacement);
+    setAttr(attributes, t.jsxAttribute(t.jsxIdentifier('style'), t.jsxExpressionContainer(object)));
   }
+  // Write attributes whose value differs from the source. New nodes get all of theirs.
   for (const [key, value] of Object.entries(node.attrs)) {
-    const index = attributes.findIndex((attr) => t.isJSXAttribute(attr) && attr.name.name === key);
-    const attr = index >= 0 ? attributes[index] : undefined;
+    const attr = attributes[attrIndex(attributes, key)];
     const existing =
       t.isJSXAttribute(attr) && t.isStringLiteral(attr.value)
         ? attr.value.value
@@ -259,10 +297,9 @@ function buildElement(
           ? literal(attr.value.expression)
           : undefined;
     if (existing !== undefined && String(existing) === value) continue;
-    const replacement = t.jsxAttribute(t.jsxIdentifier(key), t.stringLiteral(value));
-    if (index >= 0) attributes[index] = replacement;
-    else attributes.push(replacement);
+    setAttr(attributes, t.jsxAttribute(t.jsxIdentifier(key), t.stringLiteral(value)));
   }
+  // Unchanged text keeps its original children, formatting included.
   if (node.text !== undefined) {
     if (!t.isJSXElement(original) || node.text !== node.originalText)
       element.children = [t.jsxExpressionContainer(t.stringLiteral(node.text))];
@@ -274,9 +311,10 @@ function buildElement(
   return element;
 }
 
+/** Writes the edited tree back into the original source text. Throws if the root has moved. */
 export function exportSource(project: Project): string {
   const ast = parseAst(project.source);
-  const originals = new Map<string, t.Node>();
+  const originals = new Map<string, JSXChild>();
   let root: t.Node | undefined;
   walk(ast, (node) => {
     if (

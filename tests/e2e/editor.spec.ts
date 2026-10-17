@@ -1,3 +1,8 @@
+/*
+ * End-to-end tests. Playwright starts the dev server, opens the editor on the demo
+ * page in Chromium, and drives it the way a user would. See playwright.config.ts.
+ */
+
 import { test, expect } from '@playwright/test';
 
 test.beforeEach(async ({ page }) => {
@@ -128,6 +133,9 @@ test('downloads valid generated source', async ({ page }) => {
 });
 
 test('can save a permission-granted file and blocks an external edit', async ({ page }) => {
+  // Chromium only shows its real file picker after a user gesture, so swap in a fake
+  // picker whose file lives in page memory. externalEdit simulates another editor
+  // changing the file between saves.
   await page.evaluate(() => {
     let contents = 'export default () => <h1>Hello from disk</h1>';
     const state = window as unknown as {

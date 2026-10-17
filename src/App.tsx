@@ -1,3 +1,12 @@
+/*
+ * App shell.
+ *
+ * Lays out the top bar, the workspace toolbar, the three editor panels, the
+ * status bar, and the dialogs. App owns UI-only state: the open dialog, preview
+ * mode, viewport width, toasts, and the connection to a local file. Document
+ * state lives in useEditor.
+ */
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowUpRight,
@@ -44,13 +53,18 @@ export default function App() {
   const [menu, setMenu] = useState(false);
   const [preview, setPreview] = useState(false);
   const [viewport, setViewport] = useState(960);
-  const [zoom, setZoom] = useState(0.8);
-  const [fitKey, setFitKey] = useState(0);
   const [toast, setToast] = useState<{ message: string; error?: boolean } | null>(null);
   const [saving, setSaving] = useState(false);
+  // The connected file and the text it held at the last read or write. A ref is
+  // enough because it only changes alongside a project open, which re-renders anyway.
   const file = useRef<{ handle: LocalFile; expected: string } | null>(null);
   const savingRef = useRef(false);
   const closeModal = useCallback(() => setModal(null), []);
+  const openFromMenu = (next: typeof modal) => {
+    setModal(next);
+    setMenu(false);
+  };
+  // Toasts. Errors stay up for 10 s, confirmations for 3.5 s.
   const notify = useCallback((message: string, error = false) => setToast({ message, error }), []);
   useEffect(() => {
     if (toast) {
@@ -59,6 +73,7 @@ export default function App() {
     }
   }, [toast]);
 
+  /** Opens a project from the Open dialog. With a file handle, Save writes straight back to that file. */
   function openProject(project: Project, handle?: LocalFile) {
     file.current = handle ? { handle, expected: project.source } : null;
     editor.open(project);
@@ -67,10 +82,12 @@ export default function App() {
     notify(
       handle
         ? 'Component connected. Save changes to update your source file.'
-        : 'Component opened. Export your changes when you’re ready.',
+        : "Component opened. Export your changes when you're ready.",
     );
   }
 
+  // Saves to the connected file, or downloads the export when there is none.
+  // savingRef blocks a second save while the first is still writing.
   const save = useCallback(async () => {
     if (savingRef.current) return;
     savingRef.current = true;
@@ -82,7 +99,7 @@ export default function App() {
         file.current.expected = source;
         notify('Saved to your source file. Your dev server can pick up the change.');
       } else {
-        downloadSource(source, editor.project.fileName.split('/').pop()!);
+        downloadSource(source, editor.project.fileName);
         notify('Component exported. Image paths still point to your project assets.');
       }
     } catch (error) {
@@ -93,12 +110,16 @@ export default function App() {
     }
   }, [editor.project, notify]);
 
+  // Cmd+S inside a text field blurs it first so the field commits, then saves on
+  // the next frame. saveRef gives that delayed call the save built after the commit.
   const saveRef = useRef(save);
   useEffect(() => {
     saveRef.current = save;
   }, [save]);
 
   useEffect(() => {
+    // Global shortcuts. Cmd+S also works inside text fields. The rest are ignored
+    // while typing, and every shortcut is off while a dialog is open.
     function keyboard(event: KeyboardEvent) {
       const target = event.target as HTMLElement;
       const isInput = target.closest('input, textarea, select, [contenteditable="true"]');
@@ -142,12 +163,10 @@ export default function App() {
     return () => window.removeEventListener('keydown', keyboard);
   }, [editor, save, modal, preview]);
 
-  useEffect(() => {
-    setFitKey((key) => key + 1);
-  }, [preview]);
   const nodeCount = countNodes(editor.project.root);
   return (
     <div className={`app ${preview ? 'is-preview' : ''}`}>
+      {/* Top bar: project menu, connection status, preview, and save. */}
       <header className="topbar">
         <button className="brand" aria-label="Frame project menu" onClick={() => setMenu(!menu)}>
           <span className="brand-mark">
@@ -188,6 +207,7 @@ export default function App() {
             <ChevronDown size={12} />
           </button>
         </div>
+        {/* Project menu. The brand, the project name, and the ⋯ button all open it. */}
         {menu && (
           <>
             <button
@@ -197,41 +217,21 @@ export default function App() {
             />
             <div className="project-menu">
               <span>YOUR WORKSPACE</span>
-              <button
-                onClick={() => {
-                  setModal('project');
-                  setMenu(false);
-                }}
-              >
+              <button onClick={() => openFromMenu('project')}>
                 <FolderOpen size={15} />
                 Open a React project
                 <ArrowUpRight size={13} />
               </button>
-              <button
-                onClick={() => {
-                  setModal('code');
-                  setMenu(false);
-                }}
-              >
+              <button onClick={() => openFromMenu('code')}>
                 <Code2 size={15} />
                 View generated code
               </button>
-              <button
-                onClick={() => {
-                  setModal('reset');
-                  setMenu(false);
-                }}
-              >
+              <button onClick={() => openFromMenu('reset')}>
                 <RotateCcw size={15} />
                 Reset to demo
               </button>
               <hr />
-              <button
-                onClick={() => {
-                  setModal('help');
-                  setMenu(false);
-                }}
-              >
+              <button onClick={() => openFromMenu('help')}>
                 <Keyboard size={15} />
                 Keyboard shortcuts
               </button>
@@ -239,6 +239,7 @@ export default function App() {
           </>
         )}
       </header>
+      {/* Toolbar: history, viewport switch, and code. */}
       <div className="workspace-toolbar">
         <div className="workspace-tab">
           <span className="tab-icon">
@@ -293,6 +294,7 @@ export default function App() {
           </IconButton>
         </div>
       </div>
+      {/* Layers, canvas, and inspector. Preview hides both side panels. */}
       <div className="editor-layout">
         {!preview && (
           <Layers
@@ -305,14 +307,12 @@ export default function App() {
         <Canvas
           editor={editor}
           viewport={viewport}
-          zoom={zoom}
-          setZoom={setZoom}
           preview={preview}
-          fitKey={fitKey}
           onCode={() => setModal('code')}
         />
         {!preview && <Inspector editor={editor} onCode={() => setModal('code')} />}
       </div>
+      {/* Status bar: draft state, a canvas hint, and the layer count. */}
       <footer className="statusbar">
         <div>
           <span className={`status-dot ${editor.storageStatus === 'error' ? 'warning' : ''}`} />
@@ -354,6 +354,7 @@ export default function App() {
           </button>
         </div>
       )}
+      {/* Dialogs. Only one is open at a time. */}
       {modal === 'project' && <ProjectModal onClose={closeModal} onOpen={openProject} />}
       {modal === 'code' && (
         <CodeModal

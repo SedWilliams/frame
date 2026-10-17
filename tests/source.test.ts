@@ -1,9 +1,19 @@
+/*
+ * Unit tests for JSX import and export in src/source.ts and the tree operations in
+ * src/model.ts.
+ *
+ * Most round-trip tests import a snippet, edit the tree, export, and then check two
+ * things: the result still parses, and the code Frame should leave alone is still there.
+ */
+
 import { describe, expect, it } from 'vitest';
 import { parse } from '@babel/parser';
 import { exportSource, importSource } from '../src/source';
 import { cloneNode, createNode, insertNode, moveNode, removeNode, updateNode } from '../src/model';
 import { makeDemo } from '../src/demo';
 
+// A component with a hook, a comment, a handler, a style spread, a custom component,
+// and code after the export. Export has to keep all of it.
 const source = `import { useState } from 'react';
 const base = { padding: 12 };
 export default function Card({ title }: { title: string }) {
@@ -13,6 +23,7 @@ export default function Card({ title }: { title: string }) {
 }
 export const untouched = 42;`;
 
+/** Fails the test if `code` isn't parseable TSX. */
 function valid(code: string) {
   expect(() => parse(code, { sourceType: 'module', plugins: ['typescript', 'jsx'] })).not.toThrow();
 }
@@ -147,6 +158,7 @@ describe('JSX round trip', () => {
 });
 
 describe('tree operations', () => {
+  // main > [section > [h1 A, p B], aside]
   const tree = () =>
     importSource('export default () => <main><section><h1>A</h1><p>B</p></section><aside /></main>')
       .root;

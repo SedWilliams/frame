@@ -1,3 +1,11 @@
+/*
+ * The Design panel on the right.
+ *
+ * Edits the selected node's inline style. Sections appear only where they apply:
+ * text gets Typography, containers get display and direction, and images get an
+ * Image section. Preserved code and fragments get a read-only note instead.
+ */
+
 import {
   AlignLeft,
   AlignCenter,
@@ -23,6 +31,10 @@ import { Field, IconButton, Select } from './Controls';
 import { NodeIcon } from './Layers';
 import { useEffect, useState } from 'react';
 
+/**
+ * Color swatch plus a text field. The native picker only reads #rrggbb, so other
+ * values such as rgb() keep their text and show a placeholder swatch.
+ */
 function ColorField({
   label,
   value,
@@ -46,6 +58,7 @@ function ColorField({
   );
 }
 
+/** Multi-line text editor that commits on blur. */
 function TextContent({ text, onChange }: { text: string; onChange: (text: string) => void }) {
   const [draft, setDraft] = useState(text);
   useEffect(() => setDraft(text), [text]);
@@ -62,10 +75,13 @@ function TextContent({ text, onChange }: { text: string; onChange: (text: string
   );
 }
 
+/** The Design panel for the selected node. */
 export function Inspector({ editor, onCode }: { editor: Editor; onCode: () => void }) {
   const node = editor.selected;
   const style = node.style;
   const set = (values: Style) => editor.style(node.id, values);
+  // Fields hand back strings. Numeric text becomes a number, as the source would
+  // write it, and an empty field clears the property.
   function setValue(key: string, value: string) {
     const trimmed = value.trim();
     if (!trimmed) return set({ [key]: '' });
@@ -94,6 +110,8 @@ export function Inspector({ editor, onCode }: { editor: Editor; onCode: () => vo
         <span className="tag-badge">{node.opaque ? 'JSX' : node.tag.toUpperCase()}</span>
       </div>
       <div className="inspector-scroll">
+        {/* Preserved code and fragments have no style to edit. Everything else gets the
+            field sections, disabled while the layer is locked. */}
         {node.opaque || node.tag === 'fragment' ? (
           <div className="readonly-note">
             <FileCode2 size={22} />
@@ -182,6 +200,7 @@ export function Inspector({ editor, onCode }: { editor: Editor; onCode: () => vo
                 />
               </div>
             </section>
+            {/* Typography appears only for text nodes. */}
             {textNode && (
               <section className="inspector-section">
                 <h3>
@@ -192,6 +211,8 @@ export function Inspector({ editor, onCode }: { editor: Editor; onCode: () => vo
                   value={String(style.fontFamily || 'inherit')}
                   onChange={(value) => set({ fontFamily: value })}
                   options={
+                    // The current font comes first so a custom stack stays selectable.
+                    // The filter drops it from the presets if it's already one of them.
                     [
                       [
                         String(style.fontFamily || 'inherit'),
@@ -316,6 +337,7 @@ export function Inspector({ editor, onCode }: { editor: Editor; onCode: () => vo
                   onCommit={(v) => setValue('margin', v)}
                 />
               </div>
+              {/* Display and direction apply to containers, not text. */}
               {!textNode && (
                 <div className="field-grid">
                   <Select
@@ -348,6 +370,7 @@ export function Inspector({ editor, onCode }: { editor: Editor; onCode: () => vo
                 </div>
               )}
             </section>
+            {/* Image source, alt text, and fit. */}
             {node.tag === 'img' && (
               <section className="inspector-section">
                 <h3>
@@ -377,6 +400,7 @@ export function Inspector({ editor, onCode }: { editor: Editor; onCode: () => vo
             )}
           </fieldset>
         )}
+        {/* Name, duplicate, and delete work for every node, preserved code included. */}
         <section className="inspector-section layer-options">
           <h3>Layer</h3>
           <Field

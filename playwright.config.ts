@@ -1,3 +1,8 @@
+/*
+ * Playwright config for tests/e2e. Starts the Vite dev server on port 5173, or
+ * reuses one that's already running when not in CI.
+ */
+
 import { defineConfig } from '@playwright/test';
 
 export default defineConfig({

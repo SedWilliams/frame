@@ -1,78 +1,121 @@
+<div align="center">
+
+<img src="docs/assets/editor.png" alt="Frame editing the North Studio demo. The layer tree is on the left, the page is on the canvas with its hero heading selected, and the heading's typography is in the Design panel on the right." width="820">
+
 # Frame
 
-A browser-based visual editor for React components. Built with React, TypeScript, Vite, and Babel. The included North Studio page is an editable demo, not a screenshot.
+**Edit a React component on a canvas, then save the change back to its .tsx file.**
 
-## Run
+[![License: MIT](https://img.shields.io/badge/license-MIT-e86b47.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%E2%89%A5%2022.12-293d32.svg)](https://nodejs.org)
+[![Uploads](https://img.shields.io/badge/uploads-none-93978f.svg)](#privacy)
 
-Use Node.js 22.12 or newer.
+</div>
+
+Frame opens a `.jsx` or `.tsx` component in the browser and renders its JSX as a page you can click on. Select an element, change its text, size, typography, color, or spacing, drag layers into a new order, and save. Frame rewrites only the JSX it shows you. Imports, hooks, handlers, and the rest of the file stay byte-for-byte the same.
+
+The editor opens on North Studio, a demo page that loads through the same import code as your own files.
+
+## Quick start
+
+You need Node.js 22.12 or newer.
 
 ```sh
+git clone https://github.com/SedWilliams/drag_and_drop_UI.git
+cd drag_and_drop_UI
 npm install
 npm run dev
 ```
 
-Open http://127.0.0.1:5173. Chrome or Edge supports local folder access and direct file saving. Other browsers support file uploads, pasted JSX, and downloads. Folder/file permissions require localhost or HTTPS.
+The editor opens at <http://127.0.0.1:5173>.
 
-## Edit an existing component
+Use Chrome or Edge to connect a folder and save straight to files. Other browsers can open a single file or pasted JSX and export it as a download. File access only works on localhost or HTTPS.
 
-1. Start your existing app's development server separately.
-2. In Frame, click **Open project**. Select a local folder and then a `.jsx` or `.tsx` file, open a single file, or paste JSX.
-3. Select an element on the canvas or in Layers. Change its text, dimensions, typography, colors, flex layout, or spacing in Design.
-4. Click **Save to file**, or use Cmd/Ctrl+S. Your app's dev server can hot-reload the saved file. Review the generated code before applying changes to an important component.
-5. If you uploaded or pasted a file instead, click **Export code** and place the downloaded component in your project.
+## Edit a component from your app
 
-Frame checks the file against the version it last read or wrote before saving. If another editor changed it, Frame refuses to overwrite it. Download your edits and merge them, or reopen the changed file. Browser file handles last for the current session; drafts survive reloads, but you must reopen files to reconnect direct saving.
+1. Start your app's dev server as usual.
+2. In Frame, click **Open project**. Connect your project folder and pick a component, open a single file, or paste JSX.
+3. Select an element on the canvas or in Layers, and change it in the Design panel.
+4. Click **Save to file** or press Cmd/Ctrl+S. Your dev server picks up the saved file.
+5. If you uploaded or pasted the source, click **Export code** instead and put the downloaded file in your project.
 
-## Canvas tools
+Before every save, Frame checks that the file still holds the text it last read or wrote. If another editor changed it, Frame refuses to overwrite it and shows an error. Download your edits and merge them, or reopen the file.
 
-- Select layers, search them, rename them, and collapse groups.
-- Drag layers to reorder. Hold Shift while dropping on a container to nest a layer.
-- Drag elements directly onto canvas containers.
-- Insert frames, text, headings, buttons, images, and dividers.
-- Double-click text to edit it in place.
-- Drag the selection's bottom-right handle to resize.
-- Duplicate, delete, lock, or hide a layer. Hiding a regular element exports `display: none`.
-- Switch between desktop, tablet, and mobile widths.
-- Zoom, fit the canvas, and pan with the hand tool.
-- Undo and redo up to 60 document states.
-- Inspect, copy, or download generated JSX.
+Drafts autosave to browser storage and survive a reload. File connections don't, so reopen the file after a reload to save to it again. A draft lives only in this browser, so save or export anything you want to keep.
 
-Drafts save to browser local storage. They do not sync to a server and are not a substitute for saving or exporting your source. Resetting the demo replaces only the browser draft, not files on disk.
+## Use
 
-## What this version supports
+| Action | How |
+| --- | --- |
+| Select | Click an element on the canvas or a row in Layers |
+| Edit text | Double-click text on the canvas, or use the text box in Design |
+| Reorder | Drag a layer onto another. Hold Shift while dropping to nest it inside |
+| Insert | Click an entry in the Insert tab, or drag it onto a container on the canvas |
+| Resize | Drag the selection's bottom-right handle |
+| Lock or hide | Use the icons at the end of a layer row. Hidden elements export as `display: none` |
+| Change width | Switch between the Desktop 960px, Tablet 768px, and Mobile 390px viewports |
+| Pan and zoom | Use the hand tool and the zoom controls at the bottom right |
+| See the code | Click **Code** to view, copy, or download the generated source |
 
-Frame parses JSX into an editable tree and uses Babel to regenerate the selected JSX root. Imports, hooks, functions, and code outside that root remain byte-for-byte unchanged. Existing props, handlers, class names, and dynamic expressions stay in the AST. Visual changes use inline styles. Existing inline style variables and object spreads are retained with explicit visual overrides.
+| Key | Action |
+| --- | --- |
+| Cmd/Ctrl+Z | Undo, up to 60 steps |
+| Cmd/Ctrl+Shift+Z or Cmd/Ctrl+Y | Redo |
+| Cmd/Ctrl+D | Duplicate the selected layer |
+| Delete or Backspace | Delete the selected layer |
+| Cmd/Ctrl+K | Search layers |
+| Cmd/Ctrl+S | Save to file, or export |
+| Esc | Leave preview or close a dialog |
+| ? | Show shortcuts |
 
-This is a **static JSX editor**, not a runtime inspector or a full Figma replacement:
+## How it works
 
-- It edits one JSX root in one component at a time, preferring the default export. Complex components with multiple conditional returns or nested render functions should be split into smaller components before editing.
-- It does not execute hooks, event handlers, application logic, or backend code. Custom components and dynamic expressions appear as preserved placeholders.
-- External CSS, CSS modules, Tailwind utilities, imported fonts, and project build configuration are not loaded into the preview. Class names survive export, but the preview won't match an arbitrary existing app until its styling is supported. Inline style changes override many class-based rules; `!important` rules and JSX prop spreads can still take precedence at runtime.
-- Image paths are not copied or rewritten. Relative paths resolve against Frame during preview and against your app after export. The demo uses images in `public/images`; copy those assets if you export the demo into another app.
-- Viewport controls change the preview width. They do not create media queries or breakpoint-specific overrides.
-- Layout editing uses normal CSS flow and flexbox, not an unrestricted Figma coordinate system. There is no multiplayer editing, vector pen tool, component variants, multi-selection, Git integration, or two-way code watching.
-- The editor is desktop-first. On narrow screens, the inspector is hidden; the canvas, layer list, and export remain available.
+Frame parses the component with Babel and finds its JSX root, preferring the default export. It builds an editable tree from that root. HTML elements and literal text become layers. Custom components and `{expressions}` become placeholders that export unchanged.
 
-No imported source is uploaded. Google Fonts supplies the editor fonts. User-supplied image URLs can make their own network requests.
+On save, Frame parses the original source again and rebuilds the root from the tree. It starts from a copy of each original JSX node, changes only what you edited, and splices the result back into the source text. A style edit replaces the matching key in the inline `style` object. Spreads and variables in that object stay, and your value goes after them so it takes effect.
 
-## Checks
+## Limits
+
+Frame edits static JSX. It doesn't run your app.
+
+- It edits one JSX root in one component at a time. Split components with several conditional returns or nested render functions before editing them.
+- Hooks, event handlers, and other app logic don't run in the preview. Custom components and dynamic expressions show as placeholders.
+- The preview doesn't load external CSS, CSS modules, Tailwind, imported fonts, or your build config. Class names survive export, but the preview won't match an app that depends on them. Inline styles beat most class rules, though `!important` rules and JSX prop spreads can still override them at runtime.
+- Frame doesn't copy or rewrite image paths. Relative paths resolve against Frame in the preview and against your app after export. Copy `public/images` if you export the demo into another app.
+- Switching viewports changes the preview width. It doesn't write media queries.
+- Layout editing uses normal CSS flow and flexbox. There's no free positioning, multi-selection, vector drawing, component variants, multiplayer editing, or Git integration.
+- Below 760px wide the Design panel is hidden. The canvas, layers, and export still work.
+
+## Privacy
+
+Frame runs in your browser and never uploads your source. It makes two kinds of network request: the editor's Google Fonts, and any image URLs in the component you open.
+
+## Development
 
 ```sh
-npm test
-npx playwright install chromium
-npm run test:e2e
-npm run build
+npm test                          # Vitest unit tests
+npx playwright install chromium   # once, for the e2e tests
+npm run test:e2e                  # Playwright end-to-end tests
+npm run build                     # type check, then production build
+npm run format                    # Prettier
 ```
 
-Unit tests cover JSX preservation, text round trips, style variables, tree operations, and file conflict handling. Playwright tests cover editing, history, persistence, drag-and-drop, resizing, viewport changes, export, lock/visibility controls, and saving through a mocked permission-granted file handle. Native browser permission dialogs still require a manual check.
+The unit tests cover JSX round trips, style variables, tree operations, and the file conflict check. The Playwright tests drive the demo through editing, undo, persistence, drag and drop, resizing, viewports, export, locking, and saving through a fake file handle. Native permission prompts still need a manual check.
 
-## Source map
+See [CONTRIBUTING.md](CONTRIBUTING.md) before you open a pull request.
 
-- `src/model.ts`: document tree and immutable tree operations.
-- `src/source.ts`: Babel import/export, preserving code outside the edited JSX root.
-- `src/useEditor.ts`: history, selection, and browser draft storage.
-- `src/files.ts`: folder discovery, file writing, and downloads.
-- `src/components/`: canvas, layers, inspector, and dialogs.
-- `src/demo.ts`: the editable North Studio example.
+## Code map
 
-Demo photo sources on Unsplash: [living room](https://images.unsplash.com/photo-1600210492486-724fe5c67fb0) and [kitchen](https://images.unsplash.com/photo-1600607687920-4e2a09cf159d).
+- `src/model.ts` defines the page tree and the immutable edits on it.
+- `src/source.ts` turns JSX into that tree and writes the tree back into the source.
+- `src/useEditor.ts` holds the open project, undo history, selection, and draft autosave.
+- `src/files.ts` scans folders, saves with the conflict check, and downloads.
+- `src/App.tsx` lays out the shell and owns dialogs, preview, shortcuts, and saving.
+- `src/components/` has the canvas, layer tree, Design panel, dialogs, and shared controls.
+- `src/demo.ts` holds the North Studio demo source.
+
+Demo photos are from Unsplash: [living room](https://images.unsplash.com/photo-1600210492486-724fe5c67fb0) and [kitchen](https://images.unsplash.com/photo-1600607687920-4e2a09cf159d).
+
+## License
+
+[MIT](LICENSE)

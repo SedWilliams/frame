@@ -1,3 +1,11 @@
+/*
+ * The North Studio demo page.
+ *
+ * The demo is ordinary JSX source that loads through importSource like any user
+ * file, so it runs the real import and export path. data-layer attributes give its
+ * layers readable names. Its images live in public/images.
+ */
+
 import { importSource } from './source';
 
 export const demoSource = `export default function HomePage() {
@@ -51,6 +59,7 @@ export const demoSource = `export default function HomePage() {
 }
 `;
 
+/** A fresh copy of the demo. Used on first load and by Reset to demo. */
 export function makeDemo() {
   return { ...importSource(demoSource, 'HomePage.tsx'), name: 'North Studio' };
 }

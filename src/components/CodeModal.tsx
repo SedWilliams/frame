@@ -1,3 +1,8 @@
+/*
+ * The Code dialog. Shows the exported source with line numbers, and offers copy,
+ * download, and Save to file when a file is connected.
+ */
+
 import { useMemo, useState } from 'react';
 import { Check, Copy, Download, FileCode2, ArrowUpRight } from 'lucide-react';
 import { Modal } from './Controls';
@@ -16,6 +21,7 @@ export function CodeModal({
   onSave: () => void;
   connected: boolean;
 }) {
+  // The same text that Save or Download would write.
   const code = useMemo(() => exportSource(project), [project]);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
@@ -67,10 +73,7 @@ export function CodeModal({
           <span className="live-dot" />
           Generated locally. No code uploaded.
         </p>
-        <button
-          className="secondary-button"
-          onClick={() => downloadSource(code, project.fileName.split('/').pop()!)}
-        >
+        <button className="secondary-button" onClick={() => downloadSource(code, project.fileName)}>
           <Download size={14} />
           Download .tsx
         </button>

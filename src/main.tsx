@@ -1,3 +1,8 @@
+/*
+ * Browser entry point. Mounts <App /> into #root from index.html and loads the
+ * global stylesheet.
+ */
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';

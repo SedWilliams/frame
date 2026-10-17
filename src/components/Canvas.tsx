@@ -1,3 +1,11 @@
+/*
+ * The canvas.
+ *
+ * Renders the project tree as real DOM elements inside a scaled artboard, then
+ * draws the selection outline on top by measuring the selected element. Also
+ * handles in-place text editing, drag and drop, resizing, panning, and zoom.
+ */
+
 import {
   createElement,
   useEffect,
@@ -22,39 +30,43 @@ import {
   LockKeyhole,
 } from 'lucide-react';
 import type { Editor } from '../useEditor';
-import { canContain, type EditorNode, type InsertType } from '../model';
+import { canContain, voidTags, type EditorNode, type InsertType } from '../model';
 import { IconButton } from './Controls';
 
 interface CanvasProps {
   editor: Editor;
   viewport: number;
-  zoom: number;
-  setZoom: (zoom: number) => void;
   preview: boolean;
-  fitKey: number;
   onCode: () => void;
 }
+/** Selection box in artboard pixels, before zoom. */
 interface Rect {
   x: number;
   y: number;
   width: number;
   height: number;
 }
+/** Image URLs the preview will load. Anything else, such as a javascript: URL, renders without a src. */
 const safeUrl = (url: string) =>
   /^(https?:|\/|\.\.?\/|#|data:image\/(png|jpeg|webp|gif);base64,)/i.test(url) ? url : undefined;
 
-export function Canvas({ editor, viewport, zoom, setZoom, preview, fitKey, onCode }: CanvasProps) {
+export function Canvas({ editor, viewport, preview, onCode }: CanvasProps) {
   const stage = useRef<HTMLDivElement>(null);
   const artboard = useRef<HTMLDivElement>(null);
+  const [zoom, setZoom] = useState(0.8);
   const [rect, setRect] = useState<Rect | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [tool, setTool] = useState<'select' | 'hand'>('select');
   const [dropId, setDropId] = useState<string | null>(null);
+  // Live dimensions during a resize drag. Release commits them as a style edit.
   const [size, setSize] = useState<{ id: string; width: number; height: number } | null>(null);
   const [height, setHeight] = useState(900);
+  // Stops a resize or pan still running when the canvas unmounts.
   const pointerCleanup = useRef<(() => void) | null>(null);
   useEffect(() => () => pointerCleanup.current?.(), []);
 
+  // Measure the selected element after every layout change and place the outline
+  // over it. Dividing by zoom converts screen pixels back to artboard pixels.
   useLayoutEffect(() => {
     function measure() {
       const board = artboard.current;
@@ -83,12 +95,16 @@ export function Canvas({ editor, viewport, zoom, setZoom, preview, fitKey, onCod
     return () => observer.disconnect();
   }, [editor.project.root, editor.selectedId, zoom, viewport, size]);
 
-  useEffect(() => {
+  // Fit the artboard to the stage width, between 25% and 100%. Runs when the
+  // viewport or preview mode changes, and from the Fit button.
+  function fit() {
     if (stage.current)
       setZoom(Math.min(1, Math.max(0.25, (stage.current.clientWidth - 100) / viewport)));
-  }, [viewport, fitKey, setZoom]);
+  }
+  useEffect(fit, [viewport, preview]);
 
   useEffect(() => {
+    // Entering text edit focuses the element and selects all of its text.
     if (editing) {
       const el = artboard.current?.querySelector<HTMLElement>(`[data-node-id="${editing}"]`);
       el?.focus();
@@ -102,6 +118,11 @@ export function Canvas({ editor, viewport, zoom, setZoom, preview, fitKey, onCod
     }
   }, [editing]);
 
+  /**
+   * Drop on a canvas node. A dragged layer lands inside a container, or before any
+   * other node. A new element from the Insert tab goes at the end of the container,
+   * or at the end of the node's parent.
+   */
   function drop(event: DragEvent, node: EditorNode) {
     event.preventDefault();
     event.stopPropagation();
@@ -112,6 +133,7 @@ export function Canvas({ editor, viewport, zoom, setZoom, preview, fitKey, onCod
     if (id) editor.move(id, node.id, canContain(node));
   }
 
+  /** Renders a node as its real HTML tag with the editor's handlers attached. */
   function renderNode(node: EditorNode): React.ReactNode {
     if (node.hidden) return null;
     if (node.opaque)
@@ -132,6 +154,8 @@ export function Canvas({ editor, viewport, zoom, setZoom, preview, fitKey, onCod
         </div>
       );
     const activeEdit = editing === node.id;
+    // Pass through only harmless attributes. Links keep in-page anchors and lose any
+    // other href, so a click can't leave the editor. Form fields display but take no input.
     const attrs: Record<string, unknown> = {};
     for (const key of ['alt', 'title', 'placeholder', 'id'])
       if (node.attrs[key]) attrs[key] = node.attrs[key];
@@ -142,6 +166,8 @@ export function Canvas({ editor, viewport, zoom, setZoom, preview, fitKey, onCod
       attrs.readOnly = true;
       attrs.tabIndex = -1;
     }
+    // Apply the live resize size and the drop outline on top of the node's style.
+    // Fragments render as display: contents so they add no box.
     const style = {
       ...node.style,
       ...(size?.id === node.id
@@ -222,7 +248,7 @@ export function Canvas({ editor, viewport, zoom, setZoom, preview, fitKey, onCod
           if (!preview) drop(event, node);
         },
       },
-      ...(['img', 'input', 'br', 'hr'].includes(node.tag)
+      ...(voidTags.has(node.tag)
         ? []
         : node.text !== undefined
           ? [node.text]
@@ -230,6 +256,30 @@ export function Canvas({ editor, viewport, zoom, setZoom, preview, fitKey, onCod
     );
   }
 
+  /** Follows one pointer gesture on window. Starting another drops the first without ending it. */
+  function track(onMove: (event: PointerEvent) => void, onEnd: (committed: boolean) => void) {
+    function stop() {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', cancel);
+      pointerCleanup.current = null;
+    }
+    function end() {
+      stop();
+      onEnd(true);
+    }
+    function cancel() {
+      stop();
+      onEnd(false);
+    }
+    pointerCleanup.current?.();
+    pointerCleanup.current = stop;
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', cancel);
+  }
+
+  /** Drag on the corner handle. Shows the size live and commits one style edit on release. */
   function resize(event: ReactPointerEvent) {
     if (!rect || editor.selected.locked || editor.selected.opaque) return;
     event.preventDefault();
@@ -240,65 +290,46 @@ export function Canvas({ editor, viewport, zoom, setZoom, preview, fitKey, onCod
       width: Math.round(rect.width),
       height: Math.round(rect.height),
     };
-    function move(e: PointerEvent) {
-      final = {
-        id: editor.selectedId,
-        width: Math.max(16, Math.round(start.width + (e.clientX - start.x) / zoom)),
-        height: Math.max(16, Math.round(start.height + (e.clientY - start.y) / zoom)),
-      };
-      setSize(final);
-    }
-    function cleanup() {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', end);
-      window.removeEventListener('pointercancel', cancel);
-      pointerCleanup.current = null;
-    }
-    function end() {
-      editor.style(final.id, {
-        width: final.width,
-        height: final.height,
-        maxWidth: 'none',
-        flex: 'none',
-      });
-      setSize(null);
-      cleanup();
-    }
-    function cancel() {
-      setSize(null);
-      cleanup();
-    }
-    pointerCleanup.current?.();
-    pointerCleanup.current = cleanup;
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', end);
-    window.addEventListener('pointercancel', cancel);
+    track(
+      (e) => {
+        final = {
+          id: editor.selectedId,
+          width: Math.max(16, Math.round(start.width + (e.clientX - start.x) / zoom)),
+          height: Math.max(16, Math.round(start.height + (e.clientY - start.y) / zoom)),
+        };
+        setSize(final);
+      },
+      (committed) => {
+        if (committed)
+          editor.style(final.id, {
+            width: final.width,
+            height: final.height,
+            maxWidth: 'none',
+            flex: 'none',
+          });
+        setSize(null);
+      },
+    );
   }
 
+  /** Hand tool. Dragging scrolls the stage. */
   function pan(event: ReactPointerEvent) {
     if (tool !== 'hand' || !stage.current) return;
     event.preventDefault();
     const el = stage.current;
     const start = { x: event.clientX, y: event.clientY, left: el.scrollLeft, top: el.scrollTop };
-    function move(e: PointerEvent) {
-      el.scrollLeft = start.left - (e.clientX - start.x);
-      el.scrollTop = start.top - (e.clientY - start.y);
-    }
-    function end() {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', end);
-      window.removeEventListener('pointercancel', end);
-      pointerCleanup.current = null;
-    }
-    pointerCleanup.current?.();
-    pointerCleanup.current = end;
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', end);
-    window.addEventListener('pointercancel', end);
+    track(
+      (e) => {
+        el.scrollLeft = start.left - (e.clientX - start.x);
+        el.scrollTop = start.top - (e.clientY - start.y);
+      },
+      () => {},
+    );
   }
 
   return (
     <main className={`canvas-region ${preview ? 'preview-mode' : ''}`}>
+      {/* Label row above the stage, with a link to the code. */}
       <div className="canvas-topline">
         <div>
           <span className="live-dot" />
@@ -318,6 +349,8 @@ export function Canvas({ editor, viewport, zoom, setZoom, preview, fitKey, onCod
         onPointerDown={pan}
       >
         <div className="canvas-content" style={{ minWidth: viewport * zoom + 104 }}>
+          {/* The artboard renders at full viewport width and scales by zoom.
+              artboard-space reserves the scaled size so scrolling matches what you see. */}
           <div className="artboard-label" style={{ width: viewport * zoom }}>
             <span>
               <Square size={11} />
@@ -341,6 +374,7 @@ export function Canvas({ editor, viewport, zoom, setZoom, preview, fitKey, onCod
               }}
             >
               {renderNode(editor.project.root)}
+              {/* Selection outline. --inverse-zoom keeps its lines and labels the same size at any zoom. */}
               {!preview && rect && !editing && (
                 <div
                   className="selection-outline"
@@ -380,6 +414,7 @@ export function Canvas({ editor, viewport, zoom, setZoom, preview, fitKey, onCod
           </div>
         </div>
       </div>
+      {/* Floating tools: select, pan, and quick insert. */}
       {!preview && (
         <div className="canvas-tools">
           <IconButton
@@ -408,6 +443,7 @@ export function Canvas({ editor, viewport, zoom, setZoom, preview, fitKey, onCod
           </button>
         </div>
       )}
+      {/* Zoom controls. Manual zoom runs from 25% to 200%. */}
       <div className="zoom-tools">
         <IconButton label="Zoom out" onClick={() => setZoom(Math.max(0.25, zoom - 0.1))}>
           <Minus size={14} />
@@ -417,13 +453,7 @@ export function Canvas({ editor, viewport, zoom, setZoom, preview, fitKey, onCod
           <Plus size={14} />
         </IconButton>
         <i />
-        <IconButton
-          label="Fit to canvas"
-          onClick={() => {
-            if (stage.current)
-              setZoom(Math.min(1, Math.max(0.25, (stage.current.clientWidth - 100) / viewport)));
-          }}
-        >
+        <IconButton label="Fit to canvas" onClick={fit}>
           <Maximize2 size={14} />
         </IconButton>
       </div>

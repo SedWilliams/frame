@@ -1,17 +1,22 @@
+/*
+ * Shared controls: icon buttons, text fields that commit on blur, selects, and
+ * the modal dialog shell.
+ */
+
 import { useEffect, useState, type ReactNode } from 'react';
 import { ChevronDown, X } from 'lucide-react';
 
+/** Icon-only button. `label` is both the accessible name and the tooltip. */
 export function IconButton({
   label,
   children,
   active,
-  className = '',
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { label: string; active?: boolean }) {
   return (
     <button
       type="button"
-      className={`icon-button ${active ? 'active' : ''} ${className}`}
+      className={`icon-button ${active ? 'active' : ''}`}
       aria-label={label}
       title={label}
       {...props}
@@ -21,20 +26,20 @@ export function IconButton({
   );
 }
 
+/**
+ * Text input with a local draft. Commits on blur or Enter, and only when the value
+ * changed. Escape puts back the last committed value.
+ */
 export function Field({
   label,
   value,
   onCommit,
   suffix,
-  type = 'text',
-  ...props
 }: {
   label: string;
   value: string | number;
   onCommit: (value: string) => void;
   suffix?: string;
-  type?: string;
-  disabled?: boolean;
 }) {
   const [draft, setDraft] = useState(String(value));
   useEffect(() => setDraft(String(value)), [value]);
@@ -44,8 +49,6 @@ export function Field({
       <input
         aria-label={label}
         value={draft}
-        type={type}
-        {...props}
         onChange={(event) => setDraft(event.target.value)}
         onBlur={(event) => {
           if (event.currentTarget.value !== String(value)) onCommit(event.currentTarget.value);
@@ -64,6 +67,7 @@ export function Field({
   );
 }
 
+/** Native select. Options are [value, label] pairs. */
 export function Select({
   label,
   value,
@@ -89,6 +93,11 @@ export function Select({
   );
 }
 
+/**
+ * Dialog shell. Focuses itself on open, keeps Tab inside, closes on Escape or a
+ * backdrop click, and gives focus back to whatever had it before. It finds the
+ * dialog by role, which works because only one dialog is open at a time.
+ */
 export function Modal({
   title,
   subtitle,

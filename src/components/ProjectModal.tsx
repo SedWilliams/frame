@@ -1,3 +1,11 @@
+/*
+ * The Open dialog.
+ *
+ * Three ways in: connect a folder and pick a component from it, open one file, or
+ * paste source. The pickers keep a file handle, which turns on Save to file.
+ * Uploads and pastes can only be exported as a download.
+ */
+
 import { useRef, useState } from 'react';
 import {
   ArrowRight,
@@ -29,9 +37,11 @@ export function ProjectModal({
   const [workspace, setWorkspace] = useState<{ name: string; files: WorkspaceFile[] } | null>(null);
   const [search, setSearch] = useState('');
   const input = useRef<HTMLInputElement>(null);
+  /** Shows an error unless it came from the user cancelling a picker. */
   function report(error: unknown) {
     if (error instanceof Error && error.name !== 'AbortError') setError(error.message);
   }
+  /** Reads and imports a file. `path` is the folder-relative name for files from a connected folder. */
   async function openFile(file: File, handle?: LocalFile, path?: string) {
     try {
       if (!/\.(jsx|tsx)$/i.test(file.name))
@@ -42,6 +52,10 @@ export function ProjectModal({
       report(error);
     }
   }
+  /**
+   * Uses the native file picker where it exists, so Save can write back to the file.
+   * Elsewhere it falls back to the hidden upload input.
+   */
   async function pickFile() {
     setError('');
     if (!pickers.showOpenFilePicker) {
@@ -58,6 +72,7 @@ export function ProjectModal({
       report(error);
     }
   }
+  /** Scans a chosen folder for components to list. */
   async function pickFolder() {
     setError('');
     setBusy(true);
@@ -86,6 +101,7 @@ export function ProjectModal({
         </button>
       </div>
       <div className="modal-body">
+        {/* Local files tab: a connected folder's components, or the pickers. */}
         {tab === 'file' ? (
           workspace ? (
             <>
@@ -165,6 +181,7 @@ export function ProjectModal({
           )
         ) : (
           <>
+            {/* Paste tab. The file name becomes the project name and the download name. */}
             <label className="filename-label">
               File name
               <input value={fileName} onChange={(event) => setFileName(event.target.value)} />

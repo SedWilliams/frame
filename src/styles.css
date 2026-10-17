@@ -1,3 +1,12 @@
+/*
+ * Frame's stylesheet, one file for the whole app.
+ *
+ * Sections run top to bottom in screen order: base and tokens, top bar, toolbar,
+ * left panel, canvas, inspector, status bar, menus and toasts, dialogs, then the
+ * breakpoints. Colors that repeat live in the custom properties on :root.
+ */
+
+/* Base elements and color tokens. */
 * {
   box-sizing: border-box;
 }
@@ -79,6 +88,7 @@ svg {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+/* App grid and top bar. */
 .app {
   height: 100dvh;
   min-height: 560px;
@@ -251,6 +261,7 @@ svg {
   background: #f1f2ed;
   color: #414c3c;
 }
+/* Workspace toolbar: history, viewport switch, code. */
 .workspace-toolbar {
   height: 45px;
   flex-shrink: 0;
@@ -351,6 +362,7 @@ svg {
   color: #67725f;
   font-size: 11px;
 }
+/* Three-panel layout and the left panel: tabs, search, layer tree. */
 .editor-layout {
   display: flex;
   min-height: 0;
@@ -563,6 +575,7 @@ svg {
   flex-shrink: 0;
   border-top: 1px solid #f3f4ef;
 }
+/* Left panel footer: project card and workspace badge. */
 .project-card {
   display: flex;
   align-items: center;
@@ -630,6 +643,7 @@ svg {
   margin-left: auto;
   letter-spacing: 0.6px;
 }
+/* Insert tab. */
 .assets-panel {
   padding: 24px 15px;
   flex: 1;
@@ -677,6 +691,7 @@ svg {
   color: #9da691;
   margin-top: 24px;
 }
+/* Canvas: stage, artboard, and rendered nodes. */
 .canvas-region {
   flex: 1;
   min-width: 0;
@@ -793,6 +808,7 @@ svg {
 .artboard [data-node-id] {
   overflow-wrap: break-word;
 }
+/* Selection outline. --inverse-zoom keeps it the same size at any zoom. */
 .selection-outline {
   position: absolute;
   outline: calc(1.2px * var(--inverse-zoom)) solid var(--accent);
@@ -874,6 +890,7 @@ svg {
   color: #b0b6a7;
   margin-top: 24px;
 }
+/* Floating canvas tools and zoom controls. */
 .canvas-tools {
   position: absolute;
   bottom: 25px;
@@ -950,6 +967,7 @@ svg {
 .hand-tool:active {
   cursor: grabbing;
 }
+/* Inspector panel. */
 .right-panel {
   flex-shrink: 0;
   width: 264px;
@@ -1052,6 +1070,7 @@ svg {
   padding: 0;
   min-width: 0;
 }
+/* Inspector sections and their fields. */
 .inspector-section {
   padding: 17px;
   border-bottom: 1px solid var(--line);
@@ -1366,6 +1385,7 @@ svg {
   color: #a2956d;
   background: #fbf9f2;
 }
+/* Status bar. */
 .statusbar {
   height: 27px;
   flex-shrink: 0;
@@ -1410,6 +1430,7 @@ svg {
   background: #e4e8dc;
   margin: 0 5px;
 }
+/* Project menu and toasts. */
 .menu-scrim {
   position: fixed;
   inset: 0;
@@ -1496,6 +1517,7 @@ svg {
     margin-bottom: 0;
   }
 }
+/* Dialog shell. */
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -1576,6 +1598,7 @@ svg {
 .modal-body {
   padding: 24px 26px;
 }
+/* Open dialog. */
 .folder-drop {
   border: 1px dashed #d7dfc9;
   border-radius: 7px;
@@ -1795,6 +1818,7 @@ svg {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+/* Code dialog. */
 .code-filebar {
   display: flex;
   align-items: center;
@@ -1868,6 +1892,7 @@ svg {
   color: #a0b08b;
   margin: 0 auto 0 0;
 }
+/* Shortcuts and reset dialogs. */
 .shortcut-list > div {
   display: flex;
   align-items: center;
@@ -1911,6 +1936,7 @@ svg {
   justify-content: flex-end;
   gap: 9px;
 }
+/* Preview mode hides editing chrome. */
 .preview-mode .canvas-tools {
   display: none;
 }
@@ -1920,6 +1946,7 @@ svg {
 .preview-mode .artboard-space {
   box-shadow: 0 10px 50px #35442317;
 }
+/* Breakpoints. Panels narrow step by step. Under 760px the inspector is hidden. */
 @media (max-width: 1380px) {
   .zoom-tools {
     bottom: 82px;
@@ -2201,6 +2228,7 @@ svg {
     display: none;
   }
 }
+/* Turn off transitions and animations for users who ask for less motion. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -1,6 +1,12 @@
+/*
+ * Unit tests for writeLocalFile in src/files.ts: the external-edit check and
+ * abort on a failed write. Uses a fake file handle, so no browser is needed.
+ */
+
 import { describe, expect, it, vi } from 'vitest';
 import { writeLocalFile, type LocalFile } from '../src/files';
 
+/** Fake handle whose file holds `contents`, with spies on the writable stream. */
 function fixture(contents = 'original') {
   const stream = {
     write: vi.fn().mockResolvedValue(undefined),

@@ -1,3 +1,11 @@
+/*
+ * The left panel: the layer tree and the Insert tab.
+ *
+ * The tree mirrors the project root. Rows can be selected, searched, collapsed,
+ * locked, hidden, and dragged to reorder. The Insert tab lists the elements from
+ * createNode, which can be clicked in or dragged onto the canvas.
+ */
+
 import { useState } from 'react';
 import {
   ChevronDown,
@@ -24,6 +32,7 @@ import type { EditorNode, InsertType } from '../model';
 import type { Editor } from '../useEditor';
 import { IconButton } from './Controls';
 
+/** Icon for a node, picked from its tag. The inspector header uses it too. */
 export function NodeIcon({ node, size = 14 }: { node: EditorNode; size?: number }) {
   const Icon = node.opaque
     ? FileCode2
@@ -38,6 +47,7 @@ export function NodeIcon({ node, size = 14 }: { node: EditorNode; size?: number 
             : Square;
   return <Icon size={size} strokeWidth={1.6} />;
 }
+/** Entries in the Insert tab. */
 const assets: { type: InsertType; label: string; icon: typeof Type; hint: string }[] = [
   { type: 'frame', label: 'Frame', icon: LayoutGrid, hint: 'A flexible container' },
   { type: 'heading', label: 'Heading', icon: Type, hint: 'Make a statement' },
@@ -59,6 +69,7 @@ export function Layers({
   onConnect: () => void;
 }) {
   const [search, setSearch] = useState('');
+  // The demo opens with its deeper groups collapsed so the tree fits on one screen.
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
     const ids = new Set<string>();
     const visit = (node: EditorNode) => {
@@ -82,9 +93,14 @@ export function Layers({
       return next;
     });
   }
+  // A search keeps a row when it or any descendant matches, and expands every row while active.
   function matches(node: EditorNode): boolean {
     return node.name.toLowerCase().includes(search.toLowerCase()) || node.children.some(matches);
   }
+  /**
+   * One tree row and its children. Dropping a layer on a row moves it before that
+   * row. Shift-drop, or any drop on the root, moves it inside.
+   */
   function renderNode(node: EditorNode, depth = 0) {
     if (search && !matches(node)) return null;
     const expanded = !collapsed.has(node.id) || !!search;
@@ -167,6 +183,7 @@ export function Layers({
           <Plus size={15} />
         </IconButton>
       </div>
+      {/* Layers tab: search, the page entry, and the tree. */}
       {tab === 'layers' ? (
         <>
           <div className="search-wrap">
@@ -206,6 +223,7 @@ export function Layers({
           </div>
         </>
       ) : (
+        // Insert tab. A click adds at the selection. A drag places the element at the drop target.
         <div className="assets-panel">
           <div className="asset-heading">A good place to start.</div>
           <p>Click to insert, or drag onto the canvas.</p>
@@ -233,6 +251,7 @@ export function Layers({
           </div>
         </div>
       )}
+      {/* Shortcut to the Open dialog, then the workspace footer. */}
       <div className="project-card">
         <div className="project-card-icon">
           <FileCode2 size={18} />
