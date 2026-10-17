@@ -36,15 +36,20 @@ export function findNode(root: EditorNode, id: string): EditorNode | undefined {
 
 export function updateNode(root: EditorNode, id: string, patch: Partial<EditorNode>): EditorNode {
   if (root.id === id) return { ...root, ...patch };
-  return { ...root, children: root.children.map(child => updateNode(child, id, patch)) };
+  return { ...root, children: root.children.map((child) => updateNode(child, id, patch)) };
 }
 
 export function removeNode(root: EditorNode, id: string): EditorNode {
-  return { ...root, children: root.children.filter(child => child.id !== id).map(child => removeNode(child, id)) };
+  return {
+    ...root,
+    children: root.children
+      .filter((child) => child.id !== id)
+      .map((child) => removeNode(child, id)),
+  };
 }
 
 export function findParent(root: EditorNode, id: string): EditorNode | undefined {
-  if (root.children.some(child => child.id === id)) return root;
+  if (root.children.some((child) => child.id === id)) return root;
   for (const child of root.children) {
     const found = findParent(child, id);
     if (found) return found;
@@ -52,16 +57,41 @@ export function findParent(root: EditorNode, id: string): EditorNode | undefined
 }
 
 export function cloneNode(node: EditorNode): EditorNode {
-  return { ...node, id: uid(), name: `${node.name} copy`, children: node.children.map(child => cloneNode(child)) };
+  return {
+    ...node,
+    id: uid(),
+    name: `${node.name} copy`,
+    children: node.children.map((child) => cloneNode(child)),
+  };
 }
 
-export const voidTags = new Set(['img', 'input', 'br', 'hr', 'area', 'base', 'col', 'embed', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
+export const voidTags = new Set([
+  'img',
+  'input',
+  'br',
+  'hr',
+  'area',
+  'base',
+  'col',
+  'embed',
+  'link',
+  'meta',
+  'param',
+  'source',
+  'track',
+  'wbr',
+]);
 export function canContain(node: EditorNode) {
   return !node.opaque && !node.locked && node.text === undefined && !voidTags.has(node.tag);
 }
 
 /** Layer drops insert before a sibling; canvas drops append into a container. */
-export function moveNode(root: EditorNode, id: string, targetId: string, inside = false): EditorNode {
+export function moveNode(
+  root: EditorNode,
+  id: string,
+  targetId: string,
+  inside = false,
+): EditorNode {
   const node = findNode(root, id);
   const target = findNode(root, targetId);
   if (!node || !target || node.locked || id === root.id || findNode(node, targetId)) return root;
@@ -70,7 +100,7 @@ export function moveNode(root: EditorNode, id: string, targetId: string, inside 
   const cleaned = removeNode(root, id);
   const newParent = findNode(cleaned, parent.id)!;
   const children = [...newParent.children];
-  const index = inside ? children.length : children.findIndex(child => child.id === targetId);
+  const index = inside ? children.length : children.findIndex((child) => child.id === targetId);
   children.splice(index, 0, node);
   return updateNode(cleaned, parent.id, { children });
 }
@@ -90,11 +120,66 @@ export type InsertType = 'text' | 'heading' | 'button' | 'frame' | 'image' | 'di
 export function createNode(type: InsertType): EditorNode {
   const base = { id: uid(), attrs: {}, children: [] };
   switch (type) {
-    case 'heading': return { ...base, tag: 'h2', name: 'Heading', text: 'A new perspective.', style: { fontSize: 36, fontWeight: 500, color: '#293c32', margin: 0 } };
-    case 'text': return { ...base, tag: 'p', name: 'Text', text: 'A little room for your next big idea.', style: { fontSize: 16, lineHeight: 1.6, color: '#647168', margin: 0 } };
-    case 'button': return { ...base, tag: 'button', name: 'Button', text: 'Get in touch ↗', style: { padding: '14px 24px', backgroundColor: '#293c32', color: '#ffffff', borderRadius: 4, border: 'none', fontSize: 14 } };
-    case 'frame': return { ...base, tag: 'div', name: 'Frame', style: { display: 'flex', flexDirection: 'column', gap: 16, padding: 24, minHeight: 100, backgroundColor: '#efeee8', borderRadius: 4 } };
-    case 'image': return { ...base, tag: 'img', name: 'Image', attrs: { src: '/images/kitchen.jpg', alt: 'A light-filled interior' }, style: { width: '100%', height: 240, objectFit: 'cover', borderRadius: 4 } };
-    case 'divider': return { ...base, tag: 'hr', name: 'Divider', style: { width: '100%', border: 'none', borderTop: '1px solid #d9ddd5', margin: '16px 0' } };
+    case 'heading':
+      return {
+        ...base,
+        tag: 'h2',
+        name: 'Heading',
+        text: 'A new perspective.',
+        style: { fontSize: 36, fontWeight: 500, color: '#293c32', margin: 0 },
+      };
+    case 'text':
+      return {
+        ...base,
+        tag: 'p',
+        name: 'Text',
+        text: 'A little room for your next big idea.',
+        style: { fontSize: 16, lineHeight: 1.6, color: '#647168', margin: 0 },
+      };
+    case 'button':
+      return {
+        ...base,
+        tag: 'button',
+        name: 'Button',
+        text: 'Get in touch ↗',
+        style: {
+          padding: '14px 24px',
+          backgroundColor: '#293c32',
+          color: '#ffffff',
+          borderRadius: 4,
+          border: 'none',
+          fontSize: 14,
+        },
+      };
+    case 'frame':
+      return {
+        ...base,
+        tag: 'div',
+        name: 'Frame',
+        style: {
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 16,
+          padding: 24,
+          minHeight: 100,
+          backgroundColor: '#efeee8',
+          borderRadius: 4,
+        },
+      };
+    case 'image':
+      return {
+        ...base,
+        tag: 'img',
+        name: 'Image',
+        attrs: { src: '/images/kitchen.jpg', alt: 'A light-filled interior' },
+        style: { width: '100%', height: 240, objectFit: 'cover', borderRadius: 4 },
+      };
+    case 'divider':
+      return {
+        ...base,
+        tag: 'hr',
+        name: 'Divider',
+        style: { width: '100%', border: 'none', borderTop: '1px solid #d9ddd5', margin: '16px 0' },
+      };
   }
 }
