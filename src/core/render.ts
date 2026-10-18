@@ -206,8 +206,11 @@ export class Renderer {
     const key = () => this.key(`${parent}/${node.id}${index !== undefined ? `#${index}` : ''}`);
     const source = { file, id: node.id };
     const flags = { repeated: ctx.repeated || undefined, hidden: node.hidden || undefined, locked: node.locked || undefined };
-    if (node.kind === 'text')
-      return [{ key: key(), kind: 'text', tag: 'span', name: layerName(node), props: {}, text: node.text ?? '', textSource: { kind: 'text', file, nodeId: node.id }, source, children: [], ...flags }];
+    // A styled run exports wrapped in a span with that style, so it previews as one.
+    if (node.kind === 'text') {
+      const props = Object.keys(node.style).length ? { style: node.style } : {};
+      return [{ key: key(), kind: 'text', tag: 'span', name: layerName(node), props, text: node.text ?? '', textSource: { kind: 'text', file, nodeId: node.id }, source, children: [], ...flags }];
+    }
     if (node.kind === 'fragment') {
       const base = `${parent}`;
       return node.children.flatMap((child) => this.jsx(child, scope, base, ctx));

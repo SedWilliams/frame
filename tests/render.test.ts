@@ -6,6 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { docFromFiles, Workspace, type ProjectConfig } from '../src/core/workspace';
 import { renderPage, walkRender, type RNode } from '../src/core/render';
+import { applyStyle } from '../src/app/edit';
 
 function workspace(files: Record<string, string>) {
   const config: ProjectConfig = {
@@ -338,5 +339,22 @@ export default function App() { loop(); return <main><Tree depth={0} /></main>; 
     });
     const { nodes } = render(ws);
     expect(all(nodes).some((n) => n.name === 'Recursive component')).toBe(true);
+  });
+});
+
+describe('edited renders', () => {
+  it('previews a style set on a run of mixed text, which exports as a span', () => {
+    const ws = workspace({
+      'package.json': JSON.stringify({ dependencies: { react: '19' }, devDependencies: { vite: '7' } }),
+      'src/main.tsx': `import { createRoot } from 'react-dom/client';
+import App from './App';
+createRoot(document.getElementById('root')!).render(<App />);`,
+      'src/App.tsx': 'export default function App() { return <h2 className="italic">Before <strong>bold</strong></h2>; }',
+    });
+    const run = all(render(ws).nodes).find((n) => n.kind === 'text' && n.text === 'Before ')!;
+    expect(run.props.style).toBeUndefined();
+    const doc = applyStyle(ws.doc, ws.config, run.source!, { fontStyle: 'normal' }, 'inline');
+    const edited = all(render(new Workspace(doc, ws.config)).nodes).find((n) => n.text === 'Before ');
+    expect(edited?.props.style).toEqual({ fontStyle: 'normal' });
   });
 });

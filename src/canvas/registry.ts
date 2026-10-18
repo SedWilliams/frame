@@ -107,6 +107,28 @@ export function computedOf(frameId: string, key: string): CSSStyleDeclaration | 
 }
 
 /**
+ * What a layer's computed value for a property would be without its own
+ * declaration: its inline value, plus any classes `own` picks out. This is the
+ * value removing that declaration from the source leaves. The element is put
+ * back as it was before this returns.
+ */
+export function computedWithout(frameId: string, key: string, prop: string, own: (className: string) => boolean = () => false): string | undefined {
+  const element = elementOf(frameId, key);
+  if (!element) return;
+  const name = prop.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
+  const style = element.getAttribute('style');
+  const classes = element.getAttribute('class');
+  element.style.removeProperty(name);
+  element.classList.remove(...[...element.classList].filter(own));
+  const value = element.ownerDocument.defaultView?.getComputedStyle(element).getPropertyValue(name);
+  for (const [attr, original] of [['style', style], ['class', classes]] as const) {
+    if (original === null) element.removeAttribute(attr);
+    else element.setAttribute(attr, original);
+  }
+  return value;
+}
+
+/**
  * The render keys under a point in a frame, topmost first. Coordinates are CSS
  * pixels inside the frame.
  */

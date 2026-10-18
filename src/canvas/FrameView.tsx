@@ -419,12 +419,14 @@ const NodeView = memo(function NodeView({ node, ctx, editingKey }: { node: RNode
   switch (node.kind) {
     case 'instance':
       return <Nodes nodes={node.children} ctx={ctx} editingKey={editingKey} />;
-    case 'text':
+    case 'text': {
+      const style = node.props.style as Record<string, string | number> | undefined;
       return (
-        <span ref={ref} data-fkey={node.key} {...editable}>
+        <span ref={ref} data-fkey={node.key} {...editable} style={style && fixStyle(style, ctx)}>
           {node.text}
         </span>
       );
+    }
     case 'placeholder':
       return (
         <span ref={ref} data-fkey={node.key} data-frame-placeholder="">

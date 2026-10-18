@@ -22,6 +22,7 @@ import {
   pasteProperties,
   removeAutoLayout,
   reorderSelection,
+  resetStyle,
   rotateBy,
   selectAll,
   selectChildren,
@@ -207,7 +208,8 @@ export const commands: Command[] = [
   { id: 'italic', label: 'Italic', group: 'Text', keys: ['Mod+I'], run: () => {
       const node = selectedNodes()[0];
       const italic = node && computedOf(get().activeFrame, node.key)?.fontStyle === 'italic';
-      setStyle({ fontStyle: italic ? 'normal' : 'italic' }, get().selection, 'text:fontStyle');
+      if (italic) resetStyle('fontStyle', 'normal', get().selection, 'text:fontStyle');
+      else setStyle({ fontStyle: 'italic' }, get().selection, 'text:fontStyle');
     }, when: textSelected },
   { id: 'underline', label: 'Underline', group: 'Text', keys: ['Mod+U'], run: () => toggleDecoration('underline'), when: textSelected },
   { id: 'strikethrough', label: 'Strikethrough', group: 'Text', keys: ['Mod+Shift+X'], run: () => toggleDecoration('line-through'), when: textSelected },

@@ -12,7 +12,7 @@ import type { RNode } from '../core/render';
 import type { ComponentEntry } from '../core/workspace';
 import { parseFile } from '../core/parse';
 import { printFile } from '../core/print';
-import { canWriteTailwind } from '../core/tailwind';
+import { canWriteTailwind, classFor } from '../core/tailwind';
 import * as edit from './edit';
 import type { StyleChange, Target } from './edit';
 import {
@@ -31,7 +31,7 @@ import {
   type EditorState,
 } from './state';
 import { childrenOf, clickTarget, instanceScope, keysFor, parentOf, selectable } from './selection';
-import { computedOf, localRect, union, type Rect } from '../canvas/registry';
+import { computedOf, computedWithout, localRect, union, type Rect } from '../canvas/registry';
 
 /* Reading the selection. */
 
@@ -79,18 +79,37 @@ export function breakpointVariant(state: EditorState = get()): string {
 /* Style, text, and attributes. */
 
 export function setStyle(change: StyleChange, keys: string[] = get().selection, label = `style:${Object.keys(change).join(',')}`) {
+  return styleEach(keys, Object.keys(change), () => change, label);
+}
+
+/**
+ * Sets a property back to `value`, such as fontStyle to normal. Removing the
+ * layer's own declaration does that when nothing else sets the property. When
+ * something does, such as a class, an italic parent, or an <em>'s default
+ * style, `value` is written out instead.
+ */
+export function resetStyle(prop: string, value: string, keys: string[] = get().selection, label = `style:${prop}`) {
   const state = get();
-  const mode = styleMode(state, Object.keys(change));
   const variant = breakpointVariant(state);
-  const nodes = keys.map((key) => findRender(state, key)?.node).filter((n): n is RNode => !!n);
-  return commit(label, (doc) => {
-    for (const node of nodes) {
-      const target = styleTarget(node, state);
-      if (!target || node.locked) continue;
-      doc = edit.applyStyle(doc, state.config, target, change, node.kind === 'text' ? 'inline' : mode, variant);
-    }
-    return doc;
+  return styleEach(keys, [prop], (node, mode) => {
+    const own = mode === 'tailwind' ? (name: string) => !!classFor(name, prop, variant) : undefined;
+    return { [prop]: computedWithout(state.activeFrame, node.key, prop, own) === value ? null : value };
+  }, label);
+}
+
+/** Applies each layer's style change as one undo step. Text runs always take inline styles. */
+function styleEach(keys: string[], props: string[], changeFor: (node: RNode, mode: 'tailwind' | 'inline') => StyleChange, label: string) {
+  const state = get();
+  const mode = styleMode(state, props);
+  const variant = breakpointVariant(state);
+  const edits = keys.flatMap((key) => {
+    const node = findRender(state, key)?.node;
+    const target = node && !node.locked ? styleTarget(node, state) : undefined;
+    if (!node || !target) return [];
+    const nodeMode = node.kind === 'text' ? 'inline' : mode;
+    return [{ target, mode: nodeMode, change: changeFor(node, nodeMode) }];
   });
+  return commit(label, (doc) => edits.reduce((next, e) => edit.applyStyle(next, state.config, e.target, e.change, e.mode, variant), doc));
 }
 
 export function setText(key: string, text: string) {

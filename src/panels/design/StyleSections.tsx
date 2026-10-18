@@ -26,7 +26,7 @@ import {
   Underline,
   Droplet,
 } from 'lucide-react';
-import { setStyle, setText, toggleHidden } from '../../app/actions';
+import { resetStyle, setStyle, setText, toggleHidden } from '../../app/actions';
 import { get, findRender } from '../../app/state';
 import { exportLayer } from '../../app/exporting';
 import { formatPaint, formatShadows, parseBackgroundImage, parseBlur, parseShadows, type Paint, type Shadow } from '../../core/css';
@@ -39,6 +39,10 @@ import type { Inspected } from '../inspect';
 
 const set = (info: Inspected, change: Record<string, string | number | null>, label?: string) =>
   setStyle(change, info.nodes.map((n) => n.key), label);
+
+/** Turns a property off even when a class or the tag's own style sets it, as an <em>'s italic. */
+const reset = (info: Inspected, prop: string, value: string) =>
+  resetStyle(prop, value, info.nodes.map((n) => n.key), prop);
 
 const asHex = (value: string | undefined) => {
   const color = parseColor(value);
@@ -180,7 +184,7 @@ export function TypographySection({ info }: { info: Inspected }) {
           ]}
         />
         <div className="segmented">
-          <button aria-label="Italic" aria-pressed={c?.fontStyle === 'italic'} className={c?.fontStyle === 'italic' ? 'active' : ''} disabled={disabled} onClick={() => set(info, { fontStyle: c?.fontStyle === 'italic' ? null : 'italic' }, 'fontStyle')}>
+          <button aria-label="Italic" aria-pressed={c?.fontStyle === 'italic'} className={c?.fontStyle === 'italic' ? 'active' : ''} disabled={disabled} onClick={() => (c?.fontStyle === 'italic' ? reset(info, 'fontStyle', 'normal') : set(info, { fontStyle: 'italic' }, 'fontStyle'))}>
             <Italic size={14} />
           </button>
           <button aria-label="Underline" aria-pressed={decoration.includes('underline')} className={decoration.includes('underline') ? 'active' : ''} disabled={disabled} onClick={() => set(info, { textDecorationLine: decoration.includes('underline') ? 'none' : 'underline' }, 'decoration')}>
@@ -196,7 +200,7 @@ export function TypographySection({ info }: { info: Inspected }) {
           name="Letter case"
           value={transform === 'none' ? 'none' : (transform as 'none')}
           disabled={disabled}
-          onChange={(v) => set(info, { textTransform: v === 'none' ? null : v }, 'textTransform')}
+          onChange={(v) => (v === 'none' ? reset(info, 'textTransform', 'none') : set(info, { textTransform: v }, 'textTransform'))}
           options={[
             { value: 'none', label: 'As typed', icon: <CaseSensitive size={14} /> },
             { value: 'uppercase', label: 'Uppercase', icon: <CaseUpper size={14} /> },
